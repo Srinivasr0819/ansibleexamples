@@ -1,0 +1,180 @@
+---
+- name: AWS Configuration with Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    region: us-east-1
+    key_name: my-key
+    instance_type: t2.micro
+    ami_id: ami-0c55b159cbfafe1f0  # Change this to your region-specific AMI
+    security_group: my-security-group
+    bucket_name: my-ansible-bucket-{{ lookup('pipe', 'date +%s') }}
+
+  tasks:
+    #1
+    - name: Create a security group
+      amazon.aws.ec2_security_group:
+        name: "{{ security_group }}"
+        description: "Security group for Ansible created instances"
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+      register: sg
+      #2
+    - name: Create an S3 bucket
+      amazon.aws.s3_bucket:
+        name: "{{ bucket_name }}"
+        state: present
+        region: "{{ region }}"
+    #3
+    - name: Create an EC2 key pair
+      amazon.aws.ec2_key:
+        name: "{{ key_name }}"
+        region: "{{ region }}"
+      register: keypair
+#4
+    - name: Save the private key
+      copy:
+        content: "{{ keypair.key.private_key }}"
+        dest: "./{{ key_name }}.pem"
+        mode: '0600'
+      when: keypair.changed
+#5
+    - name: Launch an EC2 instance
+      amazon.aws.ec2_instance:
+        name: ansible-instance
+        key_name: "{{ key_name }}"
+        instance_type: "{{ instance_type }}"
+        security_groups: "{{ security_group }}"
+        image_id: "{{ ami_id }}"
+        region: "{{ region }}"
+        wait: yes
+      register: ec2
+#6
+    - name: Create an IAM user
+      amazon.aws.iam_user:
+        name: ansible-user
+        state: present
+#7
+    - name: Attach policy to IAM user
+      amazon.aws.iam_policy:
+        iam_type: user
+        iam_name: ansible-user
+        policy_arn: arn:aws:iam::aws:policy/AmazonS3FullAccess
+        state: present
+#8
+    - name: Create an RDS instance
+      amazon.aws.rds_instance:
+        db_instance_identifier: ansible-db
+        engine: mysql
+        username: admin
+        password: Password123!
+        instance_type: db.t2.micro
+        allocated_storage: 20
+        region: "{{ region }}"
+        state: present
+#9
+    - name: Create a DynamoDB table
+      amazon.aws.dynamodb_table:
+        name: ansible-table
+        region: "{{ region }}"
+        hash_key_name: id
+        hash_key_type: STRING
+        read_capacity: 5
+        write_capacity: 5
+#10
+    - name: Create an EBS volume
+      amazon.aws.ec2_vol:
+        region: "{{ region }}"
+        availability_zone: "{{ ec2.instances[0].placement.availability_zone }}"
+        size: 10
+        volume_type: gp2
+        state: present
+      register: ebs
+#11
+    - name: Attach EBS volume to instance
+      amazon.aws.ec2_vol:
+        instance: "{{ ec2.instances[0].instance_id }}"
+        id: "{{ ebs.volume.id }}"
+        region: "{{ region }}"
+        state: present
+#12
+    - name: Create a CloudWatch log group
+      amazon.aws.cloudwatchlogs_log_group:
+        log_group_name: ansible-log-group
+        state: present
+        region: "{{ region }}"
+#13
+    - name: Create an SNS topic
+      amazon.aws.sns_topic:
+        name: ansible-topic
+        region: "{{ region }}"
+#14
+    - name: Create an SQS queue
+      amazon.aws.sqs_queue:
+        name: ansible-queue
+        region: "{{ region }}"
+#15
+    - name: Create a Lambda function
+      amazon.aws.lambda:
+        name: ansible-lambda
+        state: present
+        runtime: python3.8
+        handler: lambda_function.lambda_handler
+        role: arn:aws:iam::123456789012:role/service-role/MyLambdaRole
+        zip_file: /path/to/lambda_function.zip
+        region: "{{ region }}"
+#16
+    - name: Create a VPC
+      amazon.aws.vpc_net:
+        name: ansible-vpc
+        cidr_block: 10.0.0.0/16
+        region: "{{ region }}"
+#17
+    - name: Create a Route 53 hosted zone
+      amazon.aws.route53_zone:
+        zone: example.com
+        state: present
+#18
+    - name: Create a CloudFront distribution
+      amazon.aws.cloudfront_distribution:
+        state: present
+        origin:
+          - domain_name: "{{ bucket_name }}.s3.amazonaws.com"
+            origin_id: ansible-origin
+        enabled: yes
+        default_cache_behavior:
+          target_origin_id: ansible-origin
+          viewer_protocol_policy: allow-all
+          allowed_methods:
+            - GET
+            - HEAD
+        region: "{{ region }}"
+#19
+    - name: Create an Elastic Load Balancer (ELB)
+      amazon.aws.elb_classic_lb:
+        name: ansible-elb
+        region: "{{ region }}"
+        state: present
+        listeners:
+          - protocol: HTTP
+            load_balancer_port: 80
+            instance_port: 80
+        subnets:
+          - subnet-abcdef123
+          - subnet-abcdef456
+#20
+    - name: Tag all resources
+      amazon.aws.ec2_tag:
+        region: "{{ region }}"
+        resource: "{{ item }}"
+        tags:
+          Environment: Production
+          ManagedBy: Ansible
+      loop:
+        - "{{ ec2.instances[0].instance_id }}"
+        - "{{ ebs.volume.id }}"

@@ -1,0 +1,176 @@
+  - name: Configure Azure Cloud Resources
+    hosts: localhost
+    connection: local
+    tasks:
+
+      # 1. Create a Resource Group
+      - name: Create Azure Resource Group
+        azure_rm_resourcegroup:
+          name: MyResourceGroup
+          location: eastus
+
+      # 2. Create a Virtual Network
+      - name: Create Virtual Network
+        azure_rm_virtualnetwork:
+          resource_group: MyResourceGroup
+          name: MyVNet
+          address_prefixes: "10.0.0.0/16"
+
+      # 3. Create a Subnet
+      - name: Create Subnet
+        azure_rm_subnet:
+          resource_group: MyResourceGroup
+          virtual_network_name: MyVNet
+          name: MySubnet
+          address_prefix: "10.0.1.0/24"
+
+      # 4. Create a Public IP Address
+      - name: Create Public IP Address
+        azure_rm_publicipaddress:
+          resource_group: MyResourceGroup
+          name: MyPublicIP
+          allocation_method: Static
+
+      # 5. Create a Network Security Group
+      - name: Create Network Security Group
+        azure_rm_securitygroup:
+          resource_group: MyResourceGroup
+          name: MyNSG
+
+      # 6. Create an NSG Rule to Allow SSH
+      - name: Create NSG Rule for SSH
+        azure_rm_securityrule:
+          resource_group: MyResourceGroup
+          security_group_name: MyNSG
+          name: AllowSSH
+          protocol: Tcp
+          destination_port_range: 22
+          access: Allow
+          priority: 100
+          direction: Inbound
+
+      # 7. Create a Network Interface
+      - name: Create Network Interface
+        azure_rm_networkinterface:
+          resource_group: MyResourceGroup
+          name: MyNIC
+          virtual_network: MyVNet
+          subnet: MySubnet
+          public_ip_name: MyPublicIP
+          security_group: MyNSG
+
+      # 8. Create a Virtual Machine
+      - name: Create Virtual Machine
+        azure_rm_virtualmachine:
+          resource_group: MyResourceGroup
+          name: MyVM
+          vm_size: Standard_B1s
+          admin_username: azureuser
+          ssh_password_enabled: false
+          ssh_public_keys:
+            - path: /home/azureuser/.ssh/authorized_keys
+              key_data: "YOUR_SSH_PUBLIC_KEY"
+          network_interfaces: MyNIC
+          image:
+            offer: UbuntuServer
+            publisher: Canonical
+            sku: '20.04-LTS'
+            version: latest
+
+      # 9. Attach a Managed Disk to the VM
+      - name: Attach Managed Disk
+        azure_rm_manageddisk:
+          resource_group: MyResourceGroup
+          name: MyDataDisk
+          location: eastus
+          size_gb: 10
+          create_option: Empty
+
+      # 10. Attach Disk to VM
+      - name: Attach Data Disk to VM
+        azure_rm_virtualmachine:
+          resource_group: MyResourceGroup
+          name: MyVM
+          os_disk_caching: ReadWrite
+          managed_disks:
+            - id: "{{ lookup('azure_rm_manageddisk', resource_group='MyResourceGroup', name='MyDataDisk') }}"
+              caching: ReadWrite
+
+      # 11. Create a Storage Account
+      - name: Create Storage Account
+        azure_rm_storageaccount:
+          resource_group: MyResourceGroup
+          name: mystorageaccount12345
+          type: Standard_LRS
+
+      # 12. Create a Storage Container
+      - name: Create Storage Container
+        azure_rm_storagecontainer:
+          resource_group: MyResourceGroup
+          storage_account_name: mystorageaccount12345
+          name: mycontainer
+
+      # 13. Upload a File to the Storage Container
+      - name: Upload File to Storage
+        azure_rm_storageblob:
+          resource_group: MyResourceGroup
+          storage_account_name: mystorageaccount12345
+          container_name: mycontainer
+          blob_name: myfile.txt
+          src: ./localfile.txt
+
+      # 14. Create an Azure Function App
+      - name: Create Function App
+        azure_rm_webapp:
+          resource_group: MyResourceGroup
+          name: MyFunctionApp
+          plan: MyAppServicePlan
+          runtime_stack: node
+
+      # 15. Deploy a Web App
+      - name: Deploy Web App
+        azure_rm_webapp:
+          resource_group: MyResourceGroup
+          name: MyWebApp
+          plan: MyAppServicePlan
+          runtime_stack: "DOTNETCORE|3.1"
+
+      # 16. Create a CosmosDB Account
+      - name: Create CosmosDB Account
+        azure_rm_cosmosdb:
+          resource_group: MyResourceGroup
+          name: MyCosmosDB
+          kind: GlobalDocumentDB
+
+      # 17. Create an Azure SQL Database
+      - name: Create SQL Server
+        azure_rm_sqlserver:
+          resource_group: MyResourceGroup
+          name: MySQLServer
+          admin_username: sqladmin
+          admin_password: "P@ssw0rd123"
+
+      # 18. Create a SQL Database
+      - name: Create SQL Database
+        azure_rm_sqldatabase:
+          resource_group: MyResourceGroup
+          server_name: MySQLServer
+          name: MyDatabase
+
+      # 19. Create an Azure Kubernetes Cluster
+      - name: Create AKS Cluster
+        azure_rm_aks:
+          resource_group: MyResourceGroup
+          name: MyAKSCluster
+          dns_prefix: myakscluster
+          agent_pool_profiles:
+            - name: agentpool
+              count: 2
+              vm_size: Standard_D2_v2
+
+      # 20. Create an Azure Load Balancer
+      - name: Create Load Balancer
+        azure_rm_loadbalancer:
+          resource_group: MyResourceGroup
+          name: MyLoadBalancer
+          sku: Standard

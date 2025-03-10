@@ -1,0 +1,105 @@
+---
+- name: AWS Cloud Configurations
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    # 1. Create an S3 Bucket
+    - name: Create S3 bucket
+      amazon.aws.s3_bucket:
+        name: my-ansible-s3-bucket
+        state: present
+        region: us-east-1
+
+    # 2. Launch an EC2 Instance
+    - name: Launch EC2 instance
+      amazon.aws.ec2_instance:
+        name: my-ansible-instance
+        key_name: my-key
+        instance_type: t2.micro
+        image_id: ami-0abcdef1234567890
+        region: us-east-1
+        security_group: default
+        vpc_subnet_id: subnet-12345678
+        state: running
+
+    # 3. Create an IAM User
+    - name: Create IAM user
+      amazon.aws.iam_user:
+        name: ansible-user
+        state: present
+
+    # 4. Create an IAM Role
+    - name: Create IAM role
+      amazon.aws.iam_role:
+        name: ansible-role
+        assume_role_policy_document: '{{ lookup("file", "assume_role_policy.json") }}'
+        state: present
+
+    # 5. Attach Policy to IAM Role
+    - name: Attach policy to IAM role
+      amazon.aws.iam_policy:
+        policy_name: S3FullAccess
+        policy_document: '{{ lookup("file", "s3_policy.json") }}'
+        state: present
+        iam_type: role
+        iam_name: ansible-role
+
+    # 6. Create an RDS Database Instance
+    - name: Create RDS instance
+      amazon.aws.rds_instance:
+        db_instance_identifier: ansible-rds
+        engine: mysql
+        username: admin
+        password: mypassword123
+        db_instance_class: db.t2.micro
+        allocated_storage: 20
+        state: present
+        region: us-east-1
+
+    # 7. Create a Lambda Function
+    - name: Deploy Lambda function
+      amazon.aws.lambda:
+        name: ansible-lambda
+        state: present
+        runtime: python3.8
+        handler: lambda_function.lambda_handler
+        zip_file: /path/to/lambda_function.zip
+        role: arn:aws:iam::123456789012:role/ansible-role
+
+    # 8. Create a CloudWatch Alarm
+    - name: Create CloudWatch alarm
+      amazon.aws.cloudwatch_alarm:
+        name: CPUUtilizationAlarm
+        metric: CPUUtilization
+        namespace: AWS/EC2
+        statistic: Average
+        comparison: '>='
+        threshold: 80.0
+        period: 300
+        evaluation_periods: 2
+        alarm_actions:
+          - arn:aws:sns:us-east-1:123456789012:my-sns-topic
+        state: present
+
+    # 9. Create a Security Group
+    - name: Create Security Group
+      amazon.aws.ec2_security_group:
+        name: ansible-security-group
+        description: Allow SSH and HTTP
+        region: us-east-1
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+              - 80
+            cidr_ip: 0.0.0.0/0
+        state: present
+
+    # 10. Create a VPC
+    - name: Create a VPC
+      amazon.aws.ec2_vpc_net:
+        name: ansible-vpc
+        cidr_block: 10.0.0.0/16
+        region: us-east-1
+        state: present
